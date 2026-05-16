@@ -1,5 +1,6 @@
 package com.vishav.miniproxy;
 
+import com.vishav.miniproxy.entity.BackendServer;
 import com.vishav.miniproxy.loadbalancer.LoadBalancer;
 import com.vishav.miniproxy.server.ProxyServer;
 import org.springframework.boot.SpringApplication;
@@ -16,8 +17,9 @@ public class MiniProxyApplication {
 
 	@Bean
 	public LoadBalancer loadBalancer() {
-		return new LoadBalancer(List.of(
-				URI.create("http://httpbin.org")
+		return new LoadBalancer(List.of(BackendServer.create("localhost", 9001),
+				BackendServer.create("localhost", 9002),
+				BackendServer.create("localhost", 9003)
 		));
 	}
 

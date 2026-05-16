@@ -2,6 +2,7 @@ package com.vishav.miniproxy.server;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.vishav.miniproxy.entity.BackendServer;
 import com.vishav.miniproxy.loadbalancer.LoadBalancer;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -42,7 +43,8 @@ public class ProxyServer {
 
     private void handle(HttpExchange exchange) throws IOException {
         // 1. Build upstream request from the incoming one
-        URI upstream = URI.create(loadBalancer.getNextServer() + exchange.getRequestURI().toString());
+        BackendServer backend = loadBalancer.getNextServer();
+        URI upstream = URI.create("http://" + backend.getHost() + ":" + backend.getPort() + exchange.getRequestURI());
         HttpRequest req = HttpRequest.newBuilder(upstream)
                 .method(exchange.getRequestMethod(),
                         HttpRequest.BodyPublishers.ofInputStream(exchange::getRequestBody))
@@ -59,11 +61,11 @@ public class ProxyServer {
             throw new IOException("Interrupted while calling upstream", e);
         }
         // 3. Copy status + headers + body back to caller
-        res.headers().map().forEach((k, vs) ->
-                vs.forEach(v -> exchange.getResponseHeaders().add(k, v)));
+        res.headers().map().forEach((k, vs) -> vs.forEach(v -> exchange.getResponseHeaders().add(k, v)));
         exchange.sendResponseHeaders(res.statusCode(), 0);
         try (var out = exchange.getResponseBody(); var in = res.body()) {
             in.transferTo(out);
         }
     }
+
 }
