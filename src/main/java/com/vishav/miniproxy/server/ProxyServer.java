@@ -16,11 +16,19 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Set;
 
 @Component
 public class ProxyServer {
     private static final Logger log = LoggerFactory.getLogger(ProxyServer.class);
-    private final HttpClient client = HttpClient.newHttpClient();
+    private static final Set<String> HOP_BY_HOP_HEADERS = Set.of(
+            "connection", "transfer-encoding", "keep-alive",
+            "proxy-authenticate", "proxy-authorization", "te", "trailers", "upgrade", "host"
+    );
+    private final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
     private final LoadBalancer loadBalancer;
     private HttpServer server;
 
@@ -45,10 +53,19 @@ public class ProxyServer {
         // 1. Build upstream request from the incoming one
         BackendServer backend = loadBalancer.getNextServer();
         URI upstream = URI.create("http://" + backend.getHost() + ":" + backend.getPort() + exchange.getRequestURI());
-        HttpRequest req = HttpRequest.newBuilder(upstream)
+        HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(upstream)
                 .method(exchange.getRequestMethod(),
                         HttpRequest.BodyPublishers.ofInputStream(exchange::getRequestBody))
-                .build();
+                .timeout(Duration.ofSeconds(30));
+
+        // Copy incoming headers, skipping hop-by-hop headers
+        exchange.getRequestHeaders().forEach((name, values) -> {
+            if (!HOP_BY_HOP_HEADERS.contains(name.toLowerCase())) {
+                values.forEach(v -> reqBuilder.header(name, v));
+            }
+        });
+
+        HttpRequest req = reqBuilder.build();
 
         log.info("curl -X {} '{}'", req.method(), req.uri());
 
@@ -62,7 +79,7 @@ public class ProxyServer {
         }
         // 3. Copy status + headers + body back to caller
         res.headers().map().forEach((k, vs) -> vs.forEach(v -> exchange.getResponseHeaders().add(k, v)));
-        exchange.sendResponseHeaders(res.statusCode(), 0);
+        exchange.sendResponseHeaders(res.statusCode(), -1);
         try (var out = exchange.getResponseBody(); var in = res.body()) {
             in.transferTo(out);
         }

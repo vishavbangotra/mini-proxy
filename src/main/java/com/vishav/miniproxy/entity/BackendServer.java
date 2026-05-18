@@ -6,9 +6,9 @@ import lombok.Data;
 public class BackendServer {
     String host;
     int port;
-    boolean healthy = true;
-    int consecutiveFailures = 0;
-    int consecutiveSuccess = 0;
+    volatile boolean healthy = true;
+    volatile int consecutiveFailures = 0;
+    volatile int consecutiveSuccess = 0;
 
     public static BackendServer create(String host, int port) {
         BackendServer backendServer = new BackendServer();
